@@ -587,6 +587,27 @@ button:active {
   cursor: pointer;
 }
 
+.warning-banner {
+  display: none;
+  width: calc(100% - 40px);
+  margin: 16px auto 0;
+  padding: 14px 18px;
+  background: rgba(255, 69, 58, 0.16);
+  color: #ffdddd;
+  border: 1px solid rgba(255, 69, 58, 0.32);
+  border-radius: 14px;
+  font-size: 0.95rem;
+  line-height: 1.4;
+  text-align: center;
+  max-width: 960px;
+  position: relative;
+  z-index: 10000;
+}
+
+.warning-banner.visible {
+  display: block;
+}
+
 .main-content {
   display: block;
 }
@@ -610,6 +631,7 @@ button:active {
 
 </head>
 <body>
+<div id="appWarning" class="warning-banner hidden"></div>
 
 <!-- Auth Modal -->
 <div class="auth-modal" id="authModal">
@@ -807,7 +829,11 @@ button:active {
 
 <script>
 let isLoginMode = true;
-const DEFAULT_SERVER_BASE = 'http://localhost:3000';
+const DEFAULT_SERVER_BASE = (window.location.protocol === 'http:' || window.location.protocol === 'https:')
+  ? window.location.origin
+  : 'http://localhost:3000';
+// If you deploy the API server separately from this frontend (for example, to GitHub Pages),
+// create a config.json file at the root of the deployed site with the API URL.
 let API_BASE = `${DEFAULT_SERVER_BASE}/api`;
 let PUBLIC_BASE_URL = DEFAULT_SERVER_BASE;
 let SERVER_BASE = DEFAULT_SERVER_BASE;
@@ -815,6 +841,23 @@ let currentUploadedFile = null;
 let currentUploadLink = null;
 let currentUploadedFileHash = null;
 let protectedAssets = [];
+
+function isRemoteFrontend() {
+  return window.location.protocol.startsWith('http') && !['localhost', '127.0.0.1'].includes(window.location.hostname);
+}
+
+function updateBackendWarning() {
+  const warningEl = document.getElementById('appWarning');
+  if (!warningEl) return;
+
+  const usingLocalApi = API_BASE.includes('localhost') || API_BASE.includes('127.0.0.1');
+  if (isRemoteFrontend() && usingLocalApi) {
+    warningEl.innerText = 'Warning: This page is hosted remotely but the API is still configured for localhost. Either deploy the backend publicly or update config.json to point to your backend URL.';
+    warningEl.classList.add('visible');
+  } else {
+    warningEl.classList.remove('visible');
+  }
+}
 
 function isStreamingLink(url) {
   if (!url) return false;
@@ -854,6 +897,10 @@ function updateBlockchainStatus(txid) {
   }
 }
 
+function isPlaceholderUrl(url) {
+  return typeof url === 'string' && url.includes('your-backend.example.com');
+}
+
 async function loadAppConfig() {
   try {
     let response = await fetch('/config.json');
@@ -865,13 +912,17 @@ async function loadAppConfig() {
       PUBLIC_BASE_URL = PUBLIC_BASE_URL || originBase;
       SERVER_BASE = SERVER_BASE || originBase;
       API_BASE = `${SERVER_BASE}/api`;
+      updateBackendWarning();
       return;
     }
 
     const config = await response.json();
-    PUBLIC_BASE_URL = config.baseUrl || originBase || PUBLIC_BASE_URL;
-    SERVER_BASE = config.baseUrl || originBase || SERVER_BASE;
-    API_BASE = config.apiBase || `${SERVER_BASE}/api`;
+    const validBaseUrl = !isPlaceholderUrl(config.baseUrl) ? config.baseUrl : originBase;
+    const validApiBase = !isPlaceholderUrl(config.apiBase) ? config.apiBase : `${validBaseUrl}/api`;
+
+    PUBLIC_BASE_URL = validBaseUrl || originBase || PUBLIC_BASE_URL;
+    SERVER_BASE = validBaseUrl || originBase || SERVER_BASE;
+    API_BASE = validApiBase || `${SERVER_BASE}/api`;
   } catch (err) {
     console.warn('Unable to load public base URL config:', err);
     const originBase = window.location.origin || PUBLIC_BASE_URL;
@@ -879,6 +930,7 @@ async function loadAppConfig() {
     SERVER_BASE = SERVER_BASE || originBase;
     API_BASE = `${SERVER_BASE}/api`;
   }
+  updateBackendWarning();
 }
 
 async function loadBlockchainStatus() {
@@ -1108,7 +1160,11 @@ async function handleAuth() {
     }
   } catch (error) {
     console.error('Fetch error:', error);
-    authMessage.innerText = 'Network error: ' + error.message;
+    const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    const hostHint = !isLocalhost && API_BASE.includes('localhost')
+      ? ' This page is hosted remotely, but the app is still trying to call localhost. Deploy the backend or update config.json.'
+      : '';
+    authMessage.innerText = 'Network error: ' + error.message + hostHint;
     authMessage.style.color = '#ff4444';
   }
 }
