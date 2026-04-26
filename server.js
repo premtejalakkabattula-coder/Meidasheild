@@ -1,4 +1,4 @@
-﻿const express = require('express');
+const express = require('express');
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
@@ -250,7 +250,7 @@ app.post('/api/register', async (req, res) => {
     }
 });
 
-app.post('/api/login', async (req, res) => {
+app.post('/https://meidasheild.onrender.com/login', async (req, res) => {
     try {
         const email = normalizeEmail(req.body.email);
         const password = normalizePassword(req.body.password);
@@ -560,7 +560,8 @@ app.get('/config.json', (req, res) => {
 });
 
 app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'frontend.html'));
+    const homeFile = fs.existsSync(path.join(__dirname, 'index.html')) ? 'index.html' : 'frontend.html';
+    res.sendFile(path.join(__dirname, homeFile));
 });
 
 app.use((req, res) => {
